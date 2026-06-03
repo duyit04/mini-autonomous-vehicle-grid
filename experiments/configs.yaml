@@ -1,0 +1,52 @@
+# ============================================================
+# configs.yaml  –  Cấu hình siêu tham số cho Đề tài 15
+# Xe tự hành mini trong grid có hướng (7x7)
+# ============================================================
+
+env:
+  grid_size: 7
+  max_steps: 200            # số bước tối đa mỗi episode
+  n_goals: 3                # số goal cố định
+  n_headings: 4             # N / E / S / W
+  collision_terminal: true  # va chạm obstacle → kết thúc episode
+
+# ---- Thuật toán Q-Learning ----
+q_learning:
+  alpha: 0.1          # tốc độ học (learning rate)
+  gamma: 0.95         # hệ số chiết khấu (discount factor)
+  epsilon_start: 1.0  # epsilon ban đầu (khám phá 100%)
+  epsilon_end: 0.01   # epsilon tối thiểu
+  epsilon_decay: 0.995  # hệ số suy giảm mỗi episode
+  n_episodes: 5000    # số episode huấn luyện
+
+# ---- Thuật toán SARSA ----
+sarsa:
+  alpha: 0.1
+  gamma: 0.95
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
+  n_episodes: 5000
+
+# ---- Đánh giá ----
+evaluation:
+  n_seeds: 10            # số seed để đánh giá
+  n_eval_episodes: 200   # số episode đánh giá mỗi seed
+  eval_epsilon: 0.0      # epsilon = 0 khi đánh giá (greedy)
+  seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+
+# ---- Logging ----
+logging:
+  log_interval: 100      # in metrics mỗi N episode
+  save_dir: "experiments/results"
+  plot_dir: "reports/figures"
