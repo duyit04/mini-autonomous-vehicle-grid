@@ -51,3 +51,8 @@ Thumbs.db
 
 # mypy
 .mypy_cache/
+# Training artifacts (tái tạo được bằng: python main.py train / evaluate)
+# - Q-table đã huấn luyện, metrics & eval summary, hình tự sinh
+experiments/results/*.npy
+experiments/results/*.json
+reports/figures/
