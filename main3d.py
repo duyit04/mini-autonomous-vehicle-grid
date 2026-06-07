@@ -37,6 +37,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
 from envs.custom_env import DirectionalCarEnv
+from agents.q_learning import QLearningAgent
+from agents.sarsa import SARSAAgent
 
 
 # ── Bảng màu (đồng bộ với dashboard 2D) ────────────────────────────────
@@ -305,6 +307,23 @@ class CarViz3D(tk.Tk):
                 padx=12, pady=1, fill="x")
 
         self._sep(parent)
+        # Bản đồ / Độ khó (đồng bộ với dashboard 2D)
+        tk.Label(parent, text="Bản đồ / Độ khó:", bg=THEME["panel"], fg=THEME["text"],
+                 font=("Segoe UI", 9, "bold")).pack(padx=12, pady=(6, 2), anchor="w")
+        self._sel_difficulty = tk.StringVar(value="Cố định")
+        diff_options = ["Cố định", "easy", "medium", "hard", "extreme"]
+        om = tk.OptionMenu(parent, self._sel_difficulty, *diff_options)
+        om.config(bg=THEME["bg"], fg=THEME["text"], font=("Segoe UI", 9),
+                  activebackground=THEME["accent"], activeforeground="white",
+                  highlightthickness=0, relief="flat", cursor="hand2", width=14)
+        om["menu"].config(bg=THEME["panel"], fg=THEME["text"])
+        om.pack(padx=12, pady=2, fill="x")
+        tk.Button(parent, text="🗺  Tạo bản đồ & train lại", bg=THEME["accent"],
+                  fg="white", font=("Segoe UI", 9, "bold"), relief="flat", bd=0,
+                  cursor="hand2", pady=6, command=self._on_change_map).pack(
+            padx=12, pady=4, fill="x")
+
+        self._sep(parent)
         tk.Label(parent, text="Tốc độ (ms/bước):", bg=THEME["panel"],
                  fg=THEME["text"], font=("Segoe UI", 9)).pack(padx=12, anchor="w")
         tk.Scale(parent, from_=60, to=800, variable=self._speed, orient="horizontal",
@@ -511,6 +530,73 @@ class CarViz3D(tk.Tk):
 
     def _on_goal_change(self):
         self._reset_episode()
+
+    # ------------------------------------------------------------------ #
+    #  Đổi bản đồ / độ khó (đồng bộ dashboard 2D)                          #
+    # ------------------------------------------------------------------ #
+
+    def _on_change_map(self):
+        """Đổi bản đồ theo độ khó đang chọn và train lại policy RL."""
+        self._stop_auto()
+        choice = self._sel_difficulty.get()
+
+        if choice == "Cố định":
+            self.env.use_fixed_map()
+            self._reload_fixed_qtables()
+            self._status.set("Bản đồ cố định – đã nạp lại Q-table đã train.")
+        else:
+            self.env.regenerate_map(difficulty=choice)
+            n_obs = len(self.env.OBSTACLES)
+            self._status.set(f"Đang train lại trên bản đồ [{choice}] – "
+                             f"{n_obs} vật cản…")
+            self.update_idletasks()
+            self._train_on_env(n_ep=4000)
+            self._status.set(f"✅ Bản đồ [{choice}] – {n_obs} vật cản | "
+                             f"đã train lại Q-Learning/SARSA.")
+
+        # reset thống kê (đổi bản đồ → số liệu cũ không còn ý nghĩa)
+        self._ep_count = 0
+        self._wins = 0
+        self._update_stats()
+        self._reset_episode()
+
+    def _reload_fixed_qtables(self):
+        """Nạp lại Q-table map cố định từ thư mục results vào policy."""
+        save_dir = os.path.join(ROOT, "experiments", "results")
+        for name, fname in [("Q-Learning", "q_learning"), ("SARSA", "sarsa")]:
+            pol = self._policies[name]
+            pol.q_table = None
+            pol.note = ""
+            p = os.path.join(save_dir, f"{fname}_seed0_qtable.npy")
+            if os.path.exists(p):
+                pol.load_qtable(p)
+
+    def _train_on_env(self, n_ep: int = 4000):
+        """Train nhanh Q-Learning & SARSA trực tiếp trên self.env hiện tại,
+        rồi nạp q_table vào policy 3D. Agent stub (NotImplementedError) bỏ qua."""
+        from experiments.train import (run_episode_qlearning,
+                                        run_episode_sarsa)
+        specs = [
+            ("Q-Learning", QLearningAgent, run_episode_qlearning),
+            ("SARSA",      SARSAAgent,     run_episode_sarsa),
+        ]
+        for name, Cls, fn in specs:
+            try:
+                ag = Cls(self.env.n_states, self.env.n_actions,
+                         alpha=0.1, gamma=0.95, epsilon_start=1.0,
+                         epsilon_end=0.01, epsilon_decay=0.999, seed=0)
+                for _ in range(n_ep):
+                    fn(ag, self.env)
+                    ag.decay_epsilon()
+                ag.epsilon = 0.0
+                self._policies[name].q_table = ag.q_table.copy()
+                self._policies[name].note = "đã train lại"
+            except NotImplementedError:
+                # thuật toán chưa cài → fallback heuristic
+                self._policies[name].q_table = None
+                self._policies[name].note = "fallback heuristic"
+            except Exception as e:
+                print(f"[WARN] Train lại {name} thất bại: {e}")
 
     # ------------------------------------------------------------------ #
     #  Tự xoay camera                                                      #
