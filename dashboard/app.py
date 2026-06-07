@@ -109,6 +109,90 @@ def _hp(cfg: dict, agent_key: str) -> dict:
     }
 
 
+def config_path() -> str:
+    """Đường dẫn tuyệt đối tới experiments/configs.yaml."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, "experiments", "configs.yaml")
+
+
+def save_config_yaml(cfg: dict, path: str = None) -> str:
+    """
+    Ghi config xuống configs.yaml theo đúng cấu trúc gốc (kèm comment tiếng Việt).
+
+    Viết tay để giữ comment & thứ tự (yaml.dump sẽ làm mất comment).
+    Các trường không có trong cfg sẽ dùng giá trị mặc định an toàn.
+    """
+    path = path or config_path()
+    env  = (cfg or {}).get("env", {}) or {}
+    ql   = (cfg or {}).get("q_learning", {}) or {}
+    sa   = (cfg or {}).get("sarsa", {}) or {}
+    ev   = (cfg or {}).get("evaluation", {}) or {}
+    lg   = (cfg or {}).get("logging", {}) or {}
+
+    def _b(v):  # bool → chữ thường yaml
+        return "true" if bool(v) else "false"
+
+    def _n(v):  # None → null
+        return "null" if v is None else v
+
+    seeds = ev.get("seeds", list(range(10)))
+    seeds_lines = "\n".join(f"    - {s}" for s in seeds)
+
+    text = f"""# ============================================================
+# configs.yaml  –  Cấu hình siêu tham số cho Đề tài 15
+# Xe tự hành mini trong grid có hướng (7x7)
+# ============================================================
+
+env:
+  grid_size: {env.get('grid_size', 7)}
+  max_steps: {env.get('max_steps', 200)}            # số bước tối đa mỗi episode
+  n_goals: {env.get('n_goals', 3)}                # số goal cố định
+  n_headings: {env.get('n_headings', 4)}             # N / E / S / W
+  collision_terminal: {_b(env.get('collision_terminal', True))}  # va chạm obstacle → kết thúc episode
+
+  # ---- Bản đồ ----
+  random_map: {_b(env.get('random_map', False))}         # true → sinh bản đồ vật cản ngẫu nhiên (vẫn đi được)
+  difficulty: {env.get('difficulty', 'medium')}        # easy | medium | hard | extreme (khi random_map=true)
+  n_obstacles: {_n(env.get('n_obstacles', None))}         # ghi đè số vật cản trực tiếp (ưu tiên hơn difficulty)
+  map_seed: {_n(env.get('map_seed', 42))}              # seed cố định bản đồ để mọi seed train cùng 1 map
+
+# ---- Thuật toán Q-Learning ----
+q_learning:
+  alpha: {ql.get('alpha', 0.1)}          # tốc độ học (learning rate)
+  gamma: {ql.get('gamma', 0.95)}         # hệ số chiết khấu (discount factor)
+  epsilon_start: {ql.get('epsilon_start', 1.0)}  # epsilon ban đầu (khám phá 100%)
+  epsilon_end: {ql.get('epsilon_end', 0.01)}   # epsilon tối thiểu
+  epsilon_decay: {ql.get('epsilon_decay', 0.995)}  # hệ số suy giảm mỗi episode
+  n_episodes: {ql.get('n_episodes', 5000)}    # số episode huấn luyện
+
+# ---- Thuật toán SARSA ----
+sarsa:
+  alpha: {sa.get('alpha', 0.1)}
+  gamma: {sa.get('gamma', 0.95)}
+  epsilon_start: {sa.get('epsilon_start', 1.0)}
+  epsilon_end: {sa.get('epsilon_end', 0.01)}
+  epsilon_decay: {sa.get('epsilon_decay', 0.995)}
+  n_episodes: {sa.get('n_episodes', 5000)}
+
+# ---- Đánh giá ----
+evaluation:
+  n_seeds: {ev.get('n_seeds', 10)}            # số seed để đánh giá
+  n_eval_episodes: {ev.get('n_eval_episodes', 200)}   # số episode đánh giá mỗi seed
+  eval_epsilon: {ev.get('eval_epsilon', 0.0)}      # epsilon = 0 khi đánh giá (greedy)
+  seeds:
+{seeds_lines}
+
+# ---- Logging ----
+logging:
+  log_interval: {lg.get('log_interval', 100)}      # in metrics mỗi N episode
+  save_dir: "{lg.get('save_dir', 'experiments/results')}"
+  plot_dir: "{lg.get('plot_dir', 'reports/figures')}"
+"""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return path
+
+
 def quick_train(n_ep: int = None, cfg: dict = None) -> dict:
     """Train nhanh Q-Learning & SARSA dùng siêu tham số từ configs.yaml."""
     from experiments.train import run_episode_qlearning, run_episode_sarsa
@@ -556,6 +640,11 @@ class App(tk.Tk):
         nb.add(tab_trail, text="🔄 Replay")
         self._build_replay_tab(tab_trail)
 
+        # Tab 5: Settings (chỉnh siêu tham số → lưu configs.yaml)
+        tab_set = tk.Frame(nb, bg=THEME["panel"])
+        nb.add(tab_set, text="⚙ Cài đặt")
+        self._build_settings_tab(tab_set)
+
         self._nb = nb
 
     # ── Tab: Learning Curves ─────────────────────────────────────────
@@ -886,6 +975,181 @@ class App(tk.Tk):
         path  = os.path.join(root, "reports", "figures", "last_trail.png")
         self._fig_replay.savefig(path, dpi=150, facecolor=THEME["panel"])
         self._set_status(f"Đã lưu: {path}")
+
+    # ------------------------------------------------------------------ #
+    #  Tab: Settings (chỉnh siêu tham số → lưu configs.yaml)              #
+    # ------------------------------------------------------------------ #
+
+    # Mô tả các trường chỉnh được: (section, field, nhãn, kiểu)
+    #   kiểu: "float" | "int" | "bool" | "choice" | "intnull"
+    _SETTINGS_SCHEMA = [
+        ("Q-Learning", "q_learning", [
+            ("alpha",         "α – tốc độ học",      "float"),
+            ("gamma",         "γ – chiết khấu",      "float"),
+            ("epsilon_start", "ε bắt đầu",           "float"),
+            ("epsilon_end",   "ε tối thiểu",         "float"),
+            ("epsilon_decay", "ε decay/episode",     "float"),
+            ("n_episodes",    "Số episode train",    "int"),
+        ]),
+        ("SARSA", "sarsa", [
+            ("alpha",         "α – tốc độ học",      "float"),
+            ("gamma",         "γ – chiết khấu",      "float"),
+            ("epsilon_start", "ε bắt đầu",           "float"),
+            ("epsilon_end",   "ε tối thiểu",         "float"),
+            ("epsilon_decay", "ε decay/episode",     "float"),
+            ("n_episodes",    "Số episode train",    "int"),
+        ]),
+        ("Môi trường", "env", [
+            ("max_steps",   "Max bước/episode",   "int"),
+            ("random_map",  "Bản đồ ngẫu nhiên",  "bool"),
+            ("difficulty",  "Độ khó",             "choice"),
+            ("n_obstacles", "Số vật cản (trống=auto)", "intnull"),
+            ("map_seed",    "Map seed",           "intnull"),
+        ]),
+        ("Đánh giá", "evaluation", [
+            ("n_eval_episodes", "Episode đánh giá/seed", "int"),
+            ("n_seeds",         "Số seed",               "int"),
+        ]),
+    ]
+    _DIFFICULTY_CHOICES = ["easy", "medium", "hard", "extreme"]
+
+    def _build_settings_tab(self, parent):
+        # Thanh nút trên cùng
+        bar = tk.Frame(parent, bg=THEME["panel"])
+        bar.pack(fill="x", padx=8, pady=(6, 2))
+        tk.Label(bar, text="⚙ Siêu tham số (lưu vào configs.yaml)",
+                 bg=THEME["panel"], fg=THEME["accent2"],
+                 font=("Segoe UI", 10, "bold")).pack(side="left")
+
+        tk.Button(bar, text="💾 Lưu vào file", bg=THEME["success"], fg="white",
+                  font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2",
+                  padx=10, command=self._settings_save).pack(side="right", padx=4)
+        tk.Button(bar, text="↻ Tải lại từ file", bg=THEME["accent2"], fg="white",
+                  font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2",
+                  padx=10, command=self._settings_reload).pack(side="right", padx=4)
+        tk.Button(bar, text="💾▶ Lưu & train lại", bg=THEME["accent"], fg="white",
+                  font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2",
+                  padx=10, command=self._settings_save_and_train).pack(side="right", padx=4)
+
+        # Vùng cuộn chứa các ô nhập (chia cột theo nhóm)
+        canvas = tk.Canvas(parent, bg=THEME["panel"], highlightthickness=0)
+        scroll = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        inner  = tk.Frame(canvas, bg=THEME["panel"])
+        inner.bind("<Configure>",
+                   lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=scroll.set)
+        canvas.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=4)
+        scroll.pack(side="right", fill="y", pady=4)
+
+        # Cho phép cuộn bằng con lăn chuột khi trỏ vào vùng settings
+        def _wheel(e):
+            canvas.yview_scroll(int(-e.delta / 120), "units")
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _wheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        # self._cfg_vars[(section_key, field)] = (tk.Var, kiểu)
+        self._cfg_vars = {}
+
+        cols = tk.Frame(inner, bg=THEME["panel"])
+        cols.pack(fill="both", expand=True)
+
+        for idx, (title, sec_key, fields) in enumerate(self._SETTINGS_SCHEMA):
+            group = tk.LabelFrame(
+                cols, text=f" {title} ", bg=THEME["panel"], fg=THEME["text"],
+                font=("Segoe UI", 9, "bold"), bd=1, relief="groove",
+                labelanchor="nw", padx=8, pady=6)
+            group.grid(row=idx // 2, column=idx % 2, sticky="nsew",
+                       padx=6, pady=6)
+            cols.columnconfigure(idx % 2, weight=1)
+
+            for frow, (field, label, kind) in enumerate(fields):
+                tk.Label(group, text=label, bg=THEME["panel"], fg=THEME["text_dim"],
+                         font=("Segoe UI", 9), anchor="w", width=20).grid(
+                    row=frow, column=0, sticky="w", pady=2)
+
+                if kind == "bool":
+                    var = tk.BooleanVar()
+                    w = tk.Checkbutton(group, variable=var, bg=THEME["panel"],
+                                       activebackground=THEME["panel"],
+                                       selectcolor=THEME["bg"])
+                elif kind == "choice":
+                    var = tk.StringVar()
+                    w = tk.OptionMenu(group, var, *self._DIFFICULTY_CHOICES)
+                    w.config(bg=THEME["bg"], fg=THEME["text"], relief="flat",
+                             highlightthickness=0, font=("Segoe UI", 9), width=10)
+                    w["menu"].config(bg=THEME["panel"], fg=THEME["text"])
+                else:
+                    var = tk.StringVar()
+                    w = tk.Entry(group, textvariable=var, width=12,
+                                 bg=THEME["bg"], fg=THEME["text"],
+                                 insertbackground=THEME["text"],
+                                 relief="flat", font=("Consolas", 9))
+                w.grid(row=frow, column=1, sticky="w", padx=6, pady=2)
+                self._cfg_vars[(sec_key, field)] = (var, kind)
+
+        self._settings_reload()
+
+    def _settings_reload(self):
+        """Nạp giá trị từ configs.yaml vào các ô nhập."""
+        cfg = load_train_config()
+        for (sec, field), (var, kind) in self._cfg_vars.items():
+            val = (cfg.get(sec, {}) or {}).get(field, None)
+            if kind == "bool":
+                var.set(bool(val))
+            elif kind == "intnull":
+                var.set("" if val is None else str(val))
+            elif kind == "choice":
+                var.set(str(val) if val else "medium")
+            else:
+                var.set("" if val is None else str(val))
+        self._set_status("⚙ Đã nạp lại cấu hình từ configs.yaml")
+
+    def _settings_collect(self):
+        """Đọc các ô nhập → dict config (giữ nguyên các khóa khác như seeds/logging)."""
+        cfg = load_train_config()
+        for (sec, field), (var, kind) in self._cfg_vars.items():
+            cfg.setdefault(sec, {})
+            raw = var.get()
+            if kind == "bool":
+                cfg[sec][field] = bool(raw)
+            elif kind == "int":
+                cfg[sec][field] = int(float(raw))
+            elif kind == "float":
+                cfg[sec][field] = float(raw)
+            elif kind == "intnull":
+                s = str(raw).strip()
+                cfg[sec][field] = None if s == "" else int(float(s))
+            elif kind == "choice":
+                cfg[sec][field] = str(raw)
+        return cfg
+
+    def _settings_save(self):
+        """Validate + ghi configs.yaml."""
+        try:
+            cfg = self._settings_collect()
+        except ValueError:
+            self._set_status("❌ Giá trị không hợp lệ – kiểm tra lại các ô số.")
+            return False
+        path = save_config_yaml(cfg)
+        self._cfg = cfg
+        self._set_status(f"✅ Đã lưu cấu hình → {os.path.basename(path)}")
+        return True
+
+    def _settings_save_and_train(self):
+        """Lưu config rồi train lại ngay trên bản đồ hiện tại."""
+        if not self._settings_save():
+            return
+        self._stop_auto()
+        self._train_rl_on_env()
+        self._ep_count = 0
+        self._wins = 0
+        self._stat_ep.set("Episode: 0")
+        self._stat_win.set("Thành công: 0")
+        self._stat_rate.set("Tỷ lệ: –")
+        self._reset_episode()
+        self._refresh_policy_tab()
+        self._set_status("✅ Đã lưu cấu hình & train lại theo tham số mới.")
 
     # ------------------------------------------------------------------ #
     #  Grid vẽ                                                             #
@@ -1256,6 +1520,9 @@ class App(tk.Tk):
         thực để người dùng theo dõi quá trình học (thay vì chạy ẩn).
         """
         from experiments.train import run_episode_qlearning, run_episode_sarsa
+        # Đọc lại configs.yaml MỖI LẦN train → chỉnh config xong bấm train là
+        # áp dụng ngay, không cần khởi động lại dashboard.
+        self._cfg = load_train_config()
         specs = [
             ("Q-Learning", QLearningAgent, run_episode_qlearning, "q_learning"),
             ("SARSA",      SARSAAgent,     run_episode_sarsa,     "sarsa"),
@@ -1359,7 +1626,9 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ #
 
     def _set_status(self, msg: str):
-        self._status_var.set(f"  {msg}")
+        # Có thể được gọi trong lúc dựng UI (trước khi status bar tạo) → bọc an toàn
+        if getattr(self, "_status_var", None) is not None:
+            self._status_var.set(f"  {msg}")
 
     def _center_window(self, w: int, h: int):
         sw = self.winfo_screenwidth()
