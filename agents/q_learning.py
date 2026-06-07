@@ -46,9 +46,38 @@ class QLearningAgent:
         epsilon_decay: float = 0.995,
         seed: int = None,
     ):
-        # TODO: lưu tất cả hyperparameter, khởi tạo Q-table (n_states × n_actions)
-        #       với giá trị 0, khởi tạo numpy RNG với seed
-        raise NotImplementedError
+        # Lưu hyperparameter
+        self.n_states = int(n_states)
+        self.n_actions = int(n_actions)
+        self.alpha = float(alpha)
+        self.gamma = float(gamma)
+        self.epsilon_start = float(epsilon_start)
+        self.epsilon_end = float(epsilon_end)
+        self.epsilon_decay = float(epsilon_decay)
+        self.epsilon = float(epsilon_start)
+
+        # RNG tái lập được
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
+
+        # Q-table khởi tạo 0: shape (n_states, n_actions)
+        self.q_table = np.zeros((self.n_states, self.n_actions), dtype=np.float64)
+
+    def _greedy_action(self, state: int) -> int:
+        """
+        Chọn argmax Q[state] với random tie-breaking.
+
+        Khi nhiều action cùng giá trị Q lớn nhất (rất phổ biến lúc đầu khi
+        Q-table toàn 0), ta chọn ngẫu nhiên trong số đó thay vì luôn lấy
+        index nhỏ nhất → tránh thiên lệch về action 0, học nhanh và đều hơn.
+        """
+        q_values = self.q_table[state]
+        max_q = q_values.max()
+        # Các action đạt giá trị lớn nhất (dùng isclose để an toàn với float)
+        best_actions = np.flatnonzero(np.isclose(q_values, max_q))
+        if best_actions.size == 1:
+            return int(best_actions[0])
+        return int(self.rng.choice(best_actions))
 
     def select_action(self, state: int, eval_mode: bool = False) -> int:
         """
@@ -63,11 +92,11 @@ class QLearningAgent:
         -------
         int   Action trong [0, n_actions)
         """
-        # TODO:
-        #   - eval_mode=True  → luôn chọn argmax Q[state]
-        #   - eval_mode=False → với xác suất ε chọn ngẫu nhiên,
-        #                        còn lại chọn argmax Q[state]
-        raise NotImplementedError
+        # Khám phá: với xác suất ε chọn ngẫu nhiên (chỉ khi training)
+        if not eval_mode and self.rng.random() < self.epsilon:
+            return int(self.rng.integers(self.n_actions))
+        # Khai thác: chọn argmax với random tie-breaking
+        return self._greedy_action(state)
 
     def update(
         self,
@@ -85,25 +114,25 @@ class QLearningAgent:
 
         Lưu ý: nếu terminated=True thì không có Q(s') → target = r
         """
-        # TODO: tính td_target, td_error, cập nhật Q[state][action]
-        raise NotImplementedError
+        # Giá trị bootstrap: 0 nếu kết thúc, ngược lại max Q(s', ·)
+        best_next = 0.0 if terminated else float(self.q_table[next_state].max())
+
+        td_target = reward + self.gamma * best_next
+        td_error = td_target - self.q_table[state, action]
+        self.q_table[state, action] += self.alpha * td_error
 
     def decay_epsilon(self):
         """Giảm epsilon sau mỗi episode: ε = max(epsilon_end, ε × epsilon_decay)"""
-        # TODO
-        raise NotImplementedError
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
     def reset(self):
         """Reset epsilon về epsilon_start (dùng khi train lại từ đầu)."""
-        # TODO
-        raise NotImplementedError
+        self.epsilon = self.epsilon_start
 
     def save(self, path: str):
         """Lưu Q-table ra file .npy"""
-        # TODO: np.save(path, self.q_table)
-        raise NotImplementedError
+        np.save(path, self.q_table)
 
     def load(self, path: str):
         """Tải Q-table từ file .npy"""
-        # TODO: self.q_table = np.load(path)
-        raise NotImplementedError
+        self.q_table = np.load(path)
