@@ -515,15 +515,15 @@ class App(tk.Tk):
         # dải accent mỏng bên trái cho cảm giác hiện đại
         tk.Frame(hdr, bg=THEME["accent"], width=5).pack(side="left", fill="y")
         tk.Label(hdr,
-                 text="🚗  Xe Tự Hành Mini  ·  Grid 7×7  ·  Đề tài 15",
+                 text="Xe Tự Hành Mini  ·  Grid 7×7  ·  Đề tài 15",
                  bg=THEME["panel2"], fg=THEME["text"],
-                 font=("Segoe UI Semibold", 14)).pack(side="left", padx=16, pady=10)
+                 font=("Segoe UI", 14, "bold")).pack(side="left", padx=16, pady=10)
 
-        # Nút toggle Dark / Light (bên phải)
+        # Nút toggle Dark / Light (bên phải) – text thuần, đối xứng
         is_dark = self._mode.get() == "dark"
         self._btn_theme = RoundedButton(
             hdr,
-            text=("🌙  Dark" if is_dark else "☀  Light"),
+            text=("Dark mode" if is_dark else "Light mode"),
             bg=THEME["panel"], fg=THEME["text"],
             font=("Segoe UI", 9, "bold"),
             radius=12, padx=14, pady=6,
@@ -593,7 +593,7 @@ class App(tk.Tk):
     def _build_controls(self, parent):
         pad = {"padx": 12, "pady": 6}
 
-        tk.Label(parent, text="⚙ ĐIỀU KHIỂN",
+        tk.Label(parent, text="ĐIỀU KHIỂN",
                  bg=THEME["panel"], fg=THEME["accent2"],
                  font=("Segoe UI", 10, "bold")).pack(**pad, anchor="w")
 
@@ -648,7 +648,7 @@ class App(tk.Tk):
         om.pack(padx=12, pady=2, fill="x")
 
         self._btn_newmap = RoundedButton(
-            parent, text="🗺  Tạo bản đồ & train lại",
+            parent, text="Tạo bản đồ & train lại",
             bg=THEME["accent"], fg="white",
             font=("Segoe UI", 9, "bold"),
             command=self._on_change_map)
@@ -673,30 +673,30 @@ class App(tk.Tk):
 
         self._sep(parent)
 
-        # Buttons (bo góc + hover)
+        # Buttons (bo góc + hover, text thuần để không lệch baseline)
         self._btn_auto = RoundedButton(
-            parent, text="▶  CHẠY thuật toán",
+            parent, text="Chạy thuật toán",
             bg=THEME["success"], fg="white",
             font=("Segoe UI", 10, "bold"),
             command=self._on_auto)
         self._btn_auto.pack(padx=12, pady=5, fill="x")
 
         self._btn_step = RoundedButton(
-            parent, text="⏭  Bước tiếp",
+            parent, text="Bước tiếp",
             bg=THEME["accent2"], fg="#06222A",
             font=("Segoe UI", 10, "bold"),
             command=self._on_step)
         self._btn_step.pack(padx=12, pady=5, fill="x")
 
         self._btn_stop_auto = RoundedButton(
-            parent, text="⏹  Dừng",
+            parent, text="Dừng",
             bg=THEME["panel2"], fg=THEME["text"],
             font=("Segoe UI", 10, "bold"),
             command=self._stop_auto)
         self._btn_stop_auto.pack(padx=12, pady=5, fill="x")
 
         self._btn_reset = RoundedButton(
-            parent, text="↺  Episode mới",
+            parent, text="Episode mới",
             bg=THEME["panel2"], fg=THEME["text"],
             font=("Segoe UI", 10, "bold"),
             command=self._on_reset)
@@ -705,7 +705,7 @@ class App(tk.Tk):
         self._sep(parent)
 
         # Thống kê nhanh
-        tk.Label(parent, text="📈 THỐNG KÊ NHANH",
+        tk.Label(parent, text="THỐNG KÊ NHANH",
                  bg=THEME["panel"], fg=THEME["accent2"],
                  font=("Segoe UI", 9, "bold")).pack(padx=12, pady=(8,2), anchor="w")
 
@@ -742,7 +742,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ #
 
     def _build_info_panel(self, parent):
-        tk.Label(parent, text="ℹ  THÔNG TIN",
+        tk.Label(parent, text="THÔNG TIN",
                  bg=THEME["panel"], fg=THEME["accent2"],
                  font=("Segoe UI", 10, "bold")).pack(padx=10, pady=(10, 4), anchor="w")
 
@@ -816,27 +816,27 @@ class App(tk.Tk):
 
         # Tab 1: Learning Curves
         tab_lc = tk.Frame(nb, bg=THEME["panel"])
-        nb.add(tab_lc, text="📈 Learning Curves")
+        nb.add(tab_lc, text="Learning Curves")
         self._build_lc_tab(tab_lc)
 
         # Tab 2: Policy
         tab_pol = tk.Frame(nb, bg=THEME["panel"])
-        nb.add(tab_pol, text="🗺 Policy")
+        nb.add(tab_pol, text="Policy")
         self._build_policy_tab(tab_pol)
 
         # Tab 3: Comparison
         tab_cmp = tk.Frame(nb, bg=THEME["panel"])
-        nb.add(tab_cmp, text="📊 So sánh")
+        nb.add(tab_cmp, text="So sánh")
         self._build_comparison_tab(tab_cmp)
 
         # Tab 4: Replay trail
         tab_trail = tk.Frame(nb, bg=THEME["panel"])
-        nb.add(tab_trail, text="🔄 Replay")
+        nb.add(tab_trail, text="Replay")
         self._build_replay_tab(tab_trail)
 
         # Tab 5: Settings (chỉnh siêu tham số → lưu configs.yaml)
         tab_set = tk.Frame(nb, bg=THEME["panel"])
-        nb.add(tab_set, text="⚙ Cài đặt")
+        nb.add(tab_set, text="Cài đặt")
         self._build_settings_tab(tab_set)
 
         self._nb = nb
@@ -1113,7 +1113,7 @@ class App(tk.Tk):
 
         ctrl = tk.Frame(parent, bg=THEME["panel"])
         ctrl.pack(fill="x", padx=8, pady=(0, 4))
-        RoundedButton(ctrl, text="💾  Lưu replay đường đi",
+        RoundedButton(ctrl, text="Lưu replay đường đi",
                       bg=THEME["accent"], fg="white",
                       font=("Segoe UI", 9, "bold"),
                       command=self._save_trail_plot).pack(side="left", pady=4)
@@ -1210,17 +1210,17 @@ class App(tk.Tk):
         # Thanh nút trên cùng
         bar = tk.Frame(parent, bg=THEME["panel"])
         bar.pack(fill="x", padx=8, pady=(6, 2))
-        tk.Label(bar, text="⚙ Siêu tham số (lưu vào configs.yaml)",
+        tk.Label(bar, text="Siêu tham số (lưu vào configs.yaml)",
                  bg=THEME["panel"], fg=THEME["accent2"],
                  font=("Segoe UI", 10, "bold")).pack(side="left")
 
-        RoundedButton(bar, text="💾 Lưu vào file", bg=THEME["success"], fg="white",
+        RoundedButton(bar, text="Lưu vào file", bg=THEME["success"], fg="white",
                       font=("Segoe UI", 9, "bold"),
                       command=self._settings_save).pack(side="right", padx=4)
-        RoundedButton(bar, text="↻ Tải lại từ file", bg=THEME["accent2"], fg="#06222A",
+        RoundedButton(bar, text="Tải lại từ file", bg=THEME["accent2"], fg="#06222A",
                       font=("Segoe UI", 9, "bold"),
                       command=self._settings_reload).pack(side="right", padx=4)
-        RoundedButton(bar, text="💾▶ Lưu & train lại", bg=THEME["accent"], fg="white",
+        RoundedButton(bar, text="Lưu & train lại", bg=THEME["accent"], fg="white",
                       font=("Segoe UI", 9, "bold"),
                       command=self._settings_save_and_train).pack(side="right", padx=4)
 
@@ -1322,11 +1322,11 @@ class App(tk.Tk):
         try:
             cfg = self._settings_collect()
         except ValueError:
-            self._set_status("❌ Giá trị không hợp lệ – kiểm tra lại các ô số.")
+            self._set_status("Giá trị không hợp lệ – kiểm tra lại các ô số.")
             return False
         path = save_config_yaml(cfg)
         self._cfg = cfg
-        self._set_status(f"✅ Đã lưu cấu hình → {os.path.basename(path)}")
+        self._set_status(f"Đã lưu cấu hình → {os.path.basename(path)}")
         return True
 
     def _settings_save_and_train(self):
@@ -1342,7 +1342,7 @@ class App(tk.Tk):
         self._stat_rate.set("Tỷ lệ: –")
         self._reset_episode()
         self._refresh_policy_tab()
-        self._set_status("✅ Đã lưu cấu hình & train lại theo tham số mới.")
+        self._set_status("Đã lưu cấu hình & train lại theo tham số mới.")
 
     # ------------------------------------------------------------------ #
     #  Grid vẽ                                                             #
@@ -1470,13 +1470,13 @@ class App(tk.Tk):
 
         if self._done:
             if self._last_reward and self._last_reward >= 50:
-                self._info_vars["status"].set("✅ THÀNH CÔNG!")
+                self._info_vars["status"].set("THÀNH CÔNG")
             elif self._last_reward and self._last_reward <= -30:
-                self._info_vars["status"].set("💥 VA CHẠM!")
+                self._info_vars["status"].set("VA CHẠM")
             else:
-                self._info_vars["status"].set("⏰ Hết bước")
+                self._info_vars["status"].set("Hết bước")
         else:
-            self._info_vars["status"].set("▶ Đang chạy")
+            self._info_vars["status"].set("Đang chạy")
 
         # Reward bar
         w = self._bar_canvas.winfo_width() or 160
@@ -1513,7 +1513,7 @@ class App(tk.Tk):
         self._redraw()
         self._set_status(
             f"Sẵn sàng – thuật toán [{self._sel_agent.get()}] | "
-            f"nhấn ▶ CHẠY để bắt đầu")
+            f"nhấn nút Chạy để bắt đầu")
 
     def _do_step(self):
         if self._done:
@@ -1527,7 +1527,7 @@ class App(tk.Tk):
         if agent is None:
             self._stop_auto()
             self._set_status(
-                f"⚠ Thuật toán [{name}] chưa được cài đặt "
+                f"Thuật toán [{name}] chưa được cài đặt "
                 f"(agents/{name.lower().replace('-', '_')}.py).")
             return
 
@@ -1539,11 +1539,11 @@ class App(tk.Tk):
                 action = agent.select_action(self._obs)
             except NotImplementedError:
                 self._stop_auto()
-                self._set_status(f"⚠ Thuật toán [{name}] chưa được cài đặt.")
+                self._set_status(f"Thuật toán [{name}] chưa được cài đặt.")
                 return
         except NotImplementedError:
             self._stop_auto()
-            self._set_status(f"⚠ Thuật toán [{name}] chưa được cài đặt.")
+            self._set_status(f"Thuật toán [{name}] chưa được cài đặt.")
             return
 
         next_obs, reward, terminated, truncated, info = self.env.step(action)
@@ -1591,13 +1591,13 @@ class App(tk.Tk):
         name  = self._sel_agent.get()
         if agent is None:
             self._set_status(
-                f"⚠ Thuật toán [{name}] chưa được cài đặt "
+                f"Thuật toán [{name}] chưa được cài đặt "
                 f"(agents/{name.lower().replace('-', '_')}.py) – không thể chạy.")
             return
         if self._done:
             self._reset_episode()
-        self._btn_auto.config(bg=THEME["accent"], text=f"⏩  Đang chạy [{name}]...")
-        self._set_status(f"▶ Đang chạy thuật toán: {name}")
+        self._btn_auto.config(bg=THEME["accent"], text=f"Đang chạy: {name}…")
+        self._set_status(f"Đang chạy thuật toán: {name}")
         self._auto_running = True
         self._auto_loop()
 
@@ -1605,7 +1605,7 @@ class App(tk.Tk):
         if not self._auto_running:
             return
         if self._done:
-            self._btn_auto.config(bg=THEME["success"], text="▶  CHẠY thuật toán")
+            self._btn_auto.config(bg=THEME["success"], text="Chạy thuật toán")
             self._auto_running = False
             return
         self._do_step()
@@ -1620,7 +1620,7 @@ class App(tk.Tk):
         if self._auto_id:
             self.after_cancel(self._auto_id)
             self._auto_id = None
-        self._btn_auto.config(bg=THEME["success"], text="▶  CHẠY thuật toán")
+        self._btn_auto.config(bg=THEME["success"], text="Chạy thuật toán")
 
     # ------------------------------------------------------------------ #
     #  Callbacks                                                           #
@@ -1664,7 +1664,7 @@ class App(tk.Tk):
             self.update_idletasks()
             self._train_rl_on_env()
             self._set_status(
-                f"✅ Bản đồ [{choice}] – {n_obs} vật cản | đã train lại "
+                f"Bản đồ [{choice}] – {n_obs} vật cản | đã train lại "
                 f"Q-Learning/SARSA trên bản đồ này.")
 
         # Reset thống kê (đổi bản đồ → episode count cũ không còn ý nghĩa)
@@ -1748,7 +1748,7 @@ class App(tk.Tk):
                     if progress and (ep % log_every == 0 or ep == episodes - 1):
                         sr = sum(recent) / len(recent) if recent else 0.0
                         pct = (ep + 1) / episodes
-                        msg = (f"🧠 Train {key}: ep {ep+1}/{episodes} "
+                        msg = (f"Train {key}: ep {ep+1}/{episodes} "
                                f"({pct:.0%}) | ε={ag.epsilon:.3f} | "
                                f"success~{sr:.0%}")
                         self._set_status(msg)
@@ -1782,7 +1782,7 @@ class App(tk.Tk):
 
         color = AGENT_COLORS.get(agent_name, THEME["accent"])
 
-        ax.text(0.5, 0.78, f"🧠 Đang huấn luyện {agent_name}",
+        ax.text(0.5, 0.78, f"Đang huấn luyện {agent_name}",
                 ha="center", va="center", fontsize=13, fontweight="bold",
                 color=THEME["text"], transform=ax.transAxes)
 
@@ -1886,7 +1886,7 @@ class App(tk.Tk):
         # Vẽ lại trên state hiện tại (không reset env)
         self._redraw()
         self._set_status(
-            f"🎨 Đã chuyển sang chế độ {'Sáng' if mode == 'light' else 'Tối'}")
+            f"Đã chuyển sang chế độ {'Sáng' if mode == 'light' else 'Tối'}")
 
     # ------------------------------------------------------------------ #
     #  Tiện ích                                                            #
