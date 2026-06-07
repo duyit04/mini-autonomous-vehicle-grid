@@ -63,6 +63,15 @@ class QLearningAgent:
         # Q-table khởi tạo 0: shape (n_states, n_actions)
         self.q_table = np.zeros((self.n_states, self.n_actions), dtype=np.float64)
 
+    # Alias để tương thích với code dùng tên `Q` (vd: dashboard policy view)
+    @property
+    def Q(self) -> np.ndarray:
+        return self.q_table
+
+    @Q.setter
+    def Q(self, value: np.ndarray):
+        self.q_table = value
+
     def _greedy_action(self, state: int) -> int:
         """
         Chọn argmax Q[state] với random tie-breaking.

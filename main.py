@@ -105,6 +105,7 @@ def print_menu():
 ║    train      – Huấn luyện tất cả agents (10 seed)   ║
 ║    evaluate   – Đánh giá và báo cáo mean±std         ║
 ║    demo       – Mở dashboard tương tác (matplotlib)  ║
+║    demo3d     – Mở bản đồ 3D xoay được (matplotlib)  ║
 ║    test       – Chạy unit tests                      ║
 ║    plots      – Vẽ learning curves và so sánh        ║
 ║    quickrun   – Demo nhanh trên terminal             ║
@@ -124,7 +125,7 @@ def main():
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["train", "evaluate", "demo", "test", "plots", "quickrun"],
+        choices=["train", "evaluate", "demo", "demo3d", "test", "plots", "quickrun"],
         default=None,
         help="Lệnh cần thực hiện",
     )
@@ -154,6 +155,11 @@ def main():
     elif args.command == "demo":
         extra = args.extra_args if args.extra_args else []
         script = os.path.join(ROOT, "dashboard", "app.py")
+        subprocess.run([sys.executable, script] + extra)
+
+    elif args.command == "demo3d":
+        extra = args.extra_args if args.extra_args else []
+        script = os.path.join(ROOT, "main3d.py")
         subprocess.run([sys.executable, script] + extra)
 
     elif args.command == "test":
