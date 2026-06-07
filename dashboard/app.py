@@ -77,17 +77,55 @@ AGENT_COLORS  = {
 #  Quick-train helper                                                       #
 # ======================================================================= #
 
-def quick_train(n_ep: int = 3000) -> dict:
+def load_train_config() -> dict:
+    """
+    Đọc siêu tham số huấn luyện từ experiments/configs.yaml.
+
+    Trả về dict config (rỗng nếu đọc lỗi → caller dùng giá trị mặc định).
+    Nhờ vậy dashboard train cùng tham số với train chính (experiments/train.py),
+    chỉnh configs.yaml là cả hai nơi đổi theo, không cần sửa code.
+    """
+    import yaml
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cfg_path = os.path.join(root, "experiments", "configs.yaml")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except Exception as e:
+        print(f"[WARN] Không đọc được configs.yaml ({e}); dùng tham số mặc định.")
+        return {}
+
+
+def _hp(cfg: dict, agent_key: str) -> dict:
+    """Lấy nhóm siêu tham số của một agent, kèm giá trị mặc định an toàn."""
+    hp = (cfg or {}).get(agent_key, {}) or {}
+    return {
+        "alpha":         hp.get("alpha", 0.1),
+        "gamma":         hp.get("gamma", 0.95),
+        "epsilon_start": hp.get("epsilon_start", 1.0),
+        "epsilon_end":   hp.get("epsilon_end", 0.01),
+        "epsilon_decay": hp.get("epsilon_decay", 0.997),
+        "n_episodes":    hp.get("n_episodes", 3000),
+    }
+
+
+def quick_train(n_ep: int = None, cfg: dict = None) -> dict:
+    """Train nhanh Q-Learning & SARSA dùng siêu tham số từ configs.yaml."""
     from experiments.train import run_episode_qlearning, run_episode_sarsa
+    cfg = cfg if cfg is not None else load_train_config()
     env = DirectionalCarEnv()
     result = {}
-    for Cls, fn, key in [
-        (QLearningAgent, run_episode_qlearning, "Q-Learning"),
-        (SARSAAgent,     run_episode_sarsa,     "SARSA"),
+    for Cls, fn, key, cfg_key in [
+        (QLearningAgent, run_episode_qlearning, "Q-Learning", "q_learning"),
+        (SARSAAgent,     run_episode_sarsa,     "SARSA",      "sarsa"),
     ]:
-        a = Cls(env.n_states, env.n_actions, alpha=0.1, gamma=0.95,
-                epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.997, seed=0)
-        for _ in range(n_ep):
+        hp = _hp(cfg, cfg_key)
+        episodes = n_ep if n_ep is not None else hp["n_episodes"]
+        a = Cls(env.n_states, env.n_actions,
+                alpha=hp["alpha"], gamma=hp["gamma"],
+                epsilon_start=hp["epsilon_start"], epsilon_end=hp["epsilon_end"],
+                epsilon_decay=hp["epsilon_decay"], seed=0)
+        for _ in range(episodes):
             fn(a, env)
             a.decay_epsilon()
         a.epsilon = 0.0
@@ -116,6 +154,7 @@ class App(tk.Tk):
         self._center_window(1180, 720)
 
         # ── Môi trường & agents ──
+        self._cfg = load_train_config()
         self.env = DirectionalCarEnv(max_steps=200)
         self._agents = self._init_agents(pretrained)
         self._sel_agent  = tk.StringVar(value="Q-Learning")
@@ -1166,7 +1205,7 @@ class App(tk.Tk):
             self._set_status(
                 f"Đang train lại trên bản đồ [{choice}] – {n_obs} vật cản...")
             self.update_idletasks()
-            self._train_rl_on_env(n_ep=4000)
+            self._train_rl_on_env()
             self._set_status(
                 f"✅ Bản đồ [{choice}] – {n_obs} vật cản | đã train lại "
                 f"Q-Learning/SARSA trên bản đồ này.")
@@ -1204,30 +1243,111 @@ class App(tk.Tk):
                     pass
             self._agents[key] = ag
 
-    def _train_rl_on_env(self, n_ep: int = 4000):
-        """Quick-train Q-Learning & SARSA trực tiếp trên self.env hiện tại."""
+    def _train_rl_on_env(self, n_ep: int = None, progress: bool = True):
+        """
+        Quick-train Q-Learning & SARSA trực tiếp trên self.env hiện tại.
+
+        Siêu tham số (alpha, gamma, epsilon, n_episodes) lấy từ configs.yaml
+        thông qua self._cfg → khớp với train chính (experiments/train.py).
+        Tham số n_ep (nếu truyền) sẽ ghi đè n_episodes trong config, hữu ích
+        khi muốn train nhanh hơn trong lúc demo tương tác.
+
+        progress=True → cập nhật thanh trạng thái + in console theo thời gian
+        thực để người dùng theo dõi quá trình học (thay vì chạy ẩn).
+        """
         from experiments.train import run_episode_qlearning, run_episode_sarsa
         specs = [
-            ("Q-Learning", QLearningAgent, run_episode_qlearning),
-            ("SARSA",      SARSAAgent,     run_episode_sarsa),
+            ("Q-Learning", QLearningAgent, run_episode_qlearning, "q_learning"),
+            ("SARSA",      SARSAAgent,     run_episode_sarsa,     "sarsa"),
         ]
-        for key, Cls, fn in specs:
+        for key, Cls, fn, cfg_key in specs:
+            hp = _hp(self._cfg, cfg_key)
+            episodes = n_ep if n_ep is not None else hp["n_episodes"]
             try:
                 ag = Cls(self.env.n_states, self.env.n_actions,
-                         alpha=0.1, gamma=0.95,
-                         epsilon_start=1.0, epsilon_end=0.01,
-                         epsilon_decay=0.999, seed=0)
-                for _ in range(n_ep):
-                    fn(ag, self.env)
+                         alpha=hp["alpha"], gamma=hp["gamma"],
+                         epsilon_start=hp["epsilon_start"],
+                         epsilon_end=hp["epsilon_end"],
+                         epsilon_decay=hp["epsilon_decay"], seed=0)
+
+                # Cập nhật tiến trình ~100 lần trong suốt quá trình train
+                log_every = max(1, episodes // 100)
+                recent = []          # cửa sổ success gần đây (tối đa 100)
+                n_success = 0
+
+                for ep in range(episodes):
+                    res = fn(ag, self.env)
                     ag.decay_epsilon()
+
+                    s = int(res.get("success", 0))
+                    n_success += s
+                    recent.append(s)
+                    if len(recent) > 100:
+                        recent.pop(0)
+
+                    if progress and (ep % log_every == 0 or ep == episodes - 1):
+                        sr = sum(recent) / len(recent) if recent else 0.0
+                        pct = (ep + 1) / episodes
+                        msg = (f"🧠 Train {key}: ep {ep+1}/{episodes} "
+                               f"({pct:.0%}) | ε={ag.epsilon:.3f} | "
+                               f"success~{sr:.0%}")
+                        self._set_status(msg)
+                        # Vẽ thanh tiến trình ngay trên grid để dễ thấy
+                        self._draw_train_progress(key, pct, sr, ag.epsilon)
+                        self.update()    # repaint UI ngay lập tức
+
                 ag.epsilon = 0.0
                 self._agents[key] = ag
+                if progress:
+                    final_sr = n_success / episodes if episodes else 0.0
+                    print(f"[TRAIN] {key}: {episodes} ep | "
+                          f"tổng success={final_sr:.1%}")
             except NotImplementedError:
                 # Thuật toán chưa cài đặt → bỏ qua, giữ nguyên trạng thái cũ
+                if progress:
+                    print(f"[TRAIN] {key}: chưa cài đặt → bỏ qua.")
                 continue
             except Exception as e:
                 print(f"[WARN] Train lại {key} thất bại: {e}")
                 continue
+
+    def _draw_train_progress(self, agent_name: str, pct: float,
+                             success_rate: float, epsilon: float):
+        """Vẽ overlay tiến trình train lên canvas grid (thanh % + chỉ số)."""
+        ax = self._ax_grid
+        ax.clear()
+        ax.set_facecolor(THEME["panel"])
+        ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+        ax.axis("off")
+
+        color = AGENT_COLORS.get(agent_name, THEME["accent"])
+
+        ax.text(0.5, 0.78, f"🧠 Đang huấn luyện {agent_name}",
+                ha="center", va="center", fontsize=13, fontweight="bold",
+                color=THEME["text"], transform=ax.transAxes)
+
+        # Khung thanh tiến trình
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (0.1, 0.48), 0.8, 0.1, boxstyle="round,pad=0.01",
+            facecolor="#1a1a2e", edgecolor=THEME["border"], linewidth=1.2,
+            transform=ax.transAxes))
+        # Phần đã hoàn thành
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (0.1, 0.48), max(0.001, 0.8 * pct), 0.1, boxstyle="round,pad=0.01",
+            facecolor=color, edgecolor="none", transform=ax.transAxes))
+        ax.text(0.5, 0.53, f"{pct:.0%}", ha="center", va="center",
+                fontsize=10, fontweight="bold", color="white",
+                transform=ax.transAxes)
+
+        ax.text(0.5, 0.30, f"Tỉ lệ thành công (gần đây): {success_rate:.0%}",
+                ha="center", va="center", fontsize=10,
+                color=THEME["success"] if success_rate >= 0.85 else THEME["warning"],
+                transform=ax.transAxes)
+        ax.text(0.5, 0.18, f"Epsilon (mức khám phá): {epsilon:.3f}",
+                ha="center", va="center", fontsize=10,
+                color=THEME["text_dim"], transform=ax.transAxes)
+
+        self._canvas_grid.draw()
 
     def _on_close(self):
         self._stop_auto()
@@ -1267,8 +1387,10 @@ def main():
 
     pretrained = None
     if args.train_first:
-        print("Training nhanh Q-Learning & SARSA (3000 episodes)...")
-        pretrained = quick_train(3000)
+        cfg = load_train_config()
+        n_ql = _hp(cfg, "q_learning")["n_episodes"]
+        print(f"Training nhanh Q-Learning & SARSA ({n_ql} episodes theo configs.yaml)...")
+        pretrained = quick_train(cfg=cfg)
         print("Xong. Mở dashboard...\n")
 
     app = App(pretrained=pretrained)
