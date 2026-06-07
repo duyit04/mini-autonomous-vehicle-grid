@@ -10,6 +10,12 @@ env:
   n_headings: 4             # N / E / S / W
   collision_terminal: true  # va chạm obstacle → kết thúc episode
 
+  # ---- Bản đồ ----
+  random_map: false         # true → sinh bản đồ vật cản ngẫu nhiên (vẫn đi được)
+  difficulty: medium        # easy | medium | hard | extreme (khi random_map=true)
+  n_obstacles: null         # ghi đè số vật cản trực tiếp (ưu tiên hơn difficulty)
+  map_seed: 42              # seed cố định bản đồ để mọi seed train cùng 1 map
+
 # ---- Thuật toán Q-Learning ----
 q_learning:
   alpha: 0.1          # tốc độ học (learning rate)

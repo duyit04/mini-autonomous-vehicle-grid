@@ -38,6 +38,7 @@ from agents.heuristic_agent import HeuristicAgent
 from agents.q_learning import QLearningAgent
 from agents.sarsa import SARSAAgent
 from experiments.train import (
+    make_env,
     run_episode_random_or_heuristic,
     run_episode_qlearning,
     run_episode_sarsa,
@@ -101,7 +102,7 @@ def evaluate_all_seeds(agent_name: str, cfg: dict,
     """
     seeds   = cfg["evaluation"]["seeds"]
     env_cfg = cfg["env"]
-    env     = DirectionalCarEnv(max_steps=env_cfg["max_steps"])
+    env     = make_env(cfg)
 
     all_rewards    = []
     all_steps      = []
@@ -242,12 +243,32 @@ def main():
         default="all",
     )
     parser.add_argument("--config", default="experiments/configs.yaml")
+    parser.add_argument(
+        "--random-map", dest="random_map", action="store_true",
+        help="Bật bản đồ vật cản ngẫu nhiên (phải khớp với lúc train)",
+    )
+    parser.add_argument(
+        "--difficulty",
+        choices=["easy", "medium", "hard", "extreme"], default=None,
+    )
+    parser.add_argument("--n-obstacles", dest="n_obstacles", type=int, default=None)
+    parser.add_argument("--map-seed", dest="map_seed", type=int, default=None)
     args = parser.parse_args()
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cfg_path = os.path.join(root, args.config)
     with open(cfg_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    # Ghi đè cấu hình bản đồ từ CLI (cần khớp cấu hình lúc train)
+    if args.random_map:
+        cfg["env"]["random_map"] = True
+    if args.difficulty is not None:
+        cfg["env"]["difficulty"] = args.difficulty
+    if args.n_obstacles is not None:
+        cfg["env"]["n_obstacles"] = args.n_obstacles
+    if args.map_seed is not None:
+        cfg["env"]["map_seed"] = args.map_seed
 
     save_dir = os.path.join(root, cfg.get("logging", {}).get("save_dir",
                                                               "experiments/results"))

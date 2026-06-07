@@ -313,7 +313,29 @@ class App(tk.Tk):
                 cursor="hand2",
                 padx=10, pady=3, width=16, anchor="w",
             )
-            rb.pack(padx=12, pady=1, fill="x")
+        self._sep(parent)
+
+        # Map / difficulty selector
+        tk.Label(parent, text="Bản đồ / Độ khó:",
+                 bg=THEME["panel"], fg=THEME["text"],
+                 font=("Segoe UI", 9, "bold")).pack(padx=12, pady=(8, 2), anchor="w")
+
+        self._sel_difficulty = tk.StringVar(value="Cố định")
+        diff_options = ["Cố định", "easy", "medium", "hard", "extreme"]
+        om = tk.OptionMenu(parent, self._sel_difficulty, *diff_options)
+        om.config(bg=THEME["bg"], fg=THEME["text"], font=("Segoe UI", 9),
+                  activebackground=THEME["accent"], activeforeground="white",
+                  highlightthickness=0, relief="flat", cursor="hand2", width=14)
+        om["menu"].config(bg=THEME["panel"], fg=THEME["text"])
+        om.pack(padx=12, pady=2, fill="x")
+
+        self._btn_newmap = tk.Button(
+            parent, text="🗺  Tạo bản đồ & train lại",
+            bg=THEME["accent"], fg="white",
+            font=("Segoe UI", 9, "bold"), relief="flat", bd=0,
+            cursor="hand2", pady=6,
+            command=self._on_change_map)
+        self._btn_newmap.pack(padx=12, pady=4, fill="x")
 
         self._sep(parent)
 
@@ -1123,6 +1145,89 @@ class App(tk.Tk):
     def _on_goal_change(self):
         self._stop_auto()
         self._reset_episode()
+
+    # ------------------------------------------------------------------ #
+    #  Đổi bản đồ / độ khó                                                 #
+    # ------------------------------------------------------------------ #
+
+    def _on_change_map(self):
+        """Đổi bản đồ theo độ khó đang chọn và train lại RL agents."""
+        self._stop_auto()
+        choice = self._sel_difficulty.get()
+
+        if choice == "Cố định":
+            self.env.use_fixed_map()
+            self._reload_fixed_agents()
+            self._set_status("Bản đồ cố định – đã nạp lại Q-table đã huấn luyện.")
+        else:
+            # Sinh bản đồ ngẫu nhiên mới (đảm bảo đi được) theo độ khó
+            self.env.regenerate_map(difficulty=choice)
+            n_obs = len(self.env.OBSTACLES)
+            self._set_status(
+                f"Đang train lại trên bản đồ [{choice}] – {n_obs} vật cản...")
+            self.update_idletasks()
+            self._train_rl_on_env(n_ep=4000)
+            self._set_status(
+                f"✅ Bản đồ [{choice}] – {n_obs} vật cản | đã train lại "
+                f"Q-Learning/SARSA trên bản đồ này.")
+
+        # Reset thống kê (đổi bản đồ → episode count cũ không còn ý nghĩa)
+        self._ep_count = 0
+        self._wins = 0
+        self._stat_ep.set("Episode: 0")
+        self._stat_win.set("Thành công: 0")
+        self._stat_rate.set("Tỷ lệ: –")
+
+        self._reset_episode()
+        self._refresh_policy_tab()
+
+    def _reload_fixed_agents(self):
+        """Nạp lại Q-table đã train (map cố định) từ thư mục results."""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        save_dir = os.path.join(root, "experiments", "results")
+        for key, fname, Cls in [
+            ("Q-Learning", "q_learning", QLearningAgent),
+            ("SARSA",      "sarsa",      SARSAAgent),
+        ]:
+            try:
+                ag = Cls(self.env.n_states, self.env.n_actions,
+                         alpha=0.1, gamma=0.95, seed=42)
+            except Exception:
+                self._agents[key] = None
+                continue
+            p = os.path.join(save_dir, f"{fname}_seed0_qtable.npy")
+            if os.path.exists(p):
+                try:
+                    ag.load(p)
+                    ag.epsilon = 0.0
+                except Exception:
+                    pass
+            self._agents[key] = ag
+
+    def _train_rl_on_env(self, n_ep: int = 4000):
+        """Quick-train Q-Learning & SARSA trực tiếp trên self.env hiện tại."""
+        from experiments.train import run_episode_qlearning, run_episode_sarsa
+        specs = [
+            ("Q-Learning", QLearningAgent, run_episode_qlearning),
+            ("SARSA",      SARSAAgent,     run_episode_sarsa),
+        ]
+        for key, Cls, fn in specs:
+            try:
+                ag = Cls(self.env.n_states, self.env.n_actions,
+                         alpha=0.1, gamma=0.95,
+                         epsilon_start=1.0, epsilon_end=0.01,
+                         epsilon_decay=0.999, seed=0)
+                for _ in range(n_ep):
+                    fn(ag, self.env)
+                    ag.decay_epsilon()
+                ag.epsilon = 0.0
+                self._agents[key] = ag
+            except NotImplementedError:
+                # Thuật toán chưa cài đặt → bỏ qua, giữ nguyên trạng thái cũ
+                continue
+            except Exception as e:
+                print(f"[WARN] Train lại {key} thất bại: {e}")
+                continue
 
     def _on_close(self):
         self._stop_auto()

@@ -38,6 +38,24 @@ from agents.q_learning import QLearningAgent
 from agents.sarsa import SARSAAgent
 
 
+def make_env(cfg: dict) -> DirectionalCarEnv:
+    """
+    Khởi tạo môi trường từ config, hỗ trợ bản đồ ngẫu nhiên + độ khó.
+
+    Đọc các trường trong cfg["env"]:
+        max_steps, random_map, difficulty, n_obstacles, map_seed
+    Các trường bản đồ là tùy chọn → mặc định dùng map cố định (tương thích cũ).
+    """
+    env_cfg = cfg["env"]
+    return DirectionalCarEnv(
+        max_steps   = env_cfg["max_steps"],
+        random_map  = env_cfg.get("random_map", False),
+        difficulty  = env_cfg.get("difficulty", "medium"),
+        n_obstacles = env_cfg.get("n_obstacles", None),
+        map_seed    = env_cfg.get("map_seed", None),
+    )
+
+
 # ======================================================================= #
 #  Hàm train một agent trong một lần chạy (một seed)                       #
 # ======================================================================= #
@@ -170,7 +188,7 @@ def train(
     dict  Metrics toàn bộ quá trình huấn luyện
     """
     env_cfg = cfg["env"]
-    env = DirectionalCarEnv(max_steps=env_cfg["max_steps"])
+    env = make_env(cfg)
 
     n_episodes = 1000  # cho random/heuristic (không có epsilon decay)
 
@@ -309,6 +327,24 @@ def main():
         action="store_true",
         help="Tắt verbose logging",
     )
+    parser.add_argument(
+        "--random-map", dest="random_map", action="store_true",
+        help="Bật bản đồ vật cản ngẫu nhiên (vẫn đảm bảo đi được)",
+    )
+    parser.add_argument(
+        "--difficulty",
+        choices=["easy", "medium", "hard", "extreme"],
+        default=None,
+        help="Mức độ khó khi dùng --random-map",
+    )
+    parser.add_argument(
+        "--n-obstacles", dest="n_obstacles", type=int, default=None,
+        help="Số vật cản (ghi đè difficulty)",
+    )
+    parser.add_argument(
+        "--map-seed", dest="map_seed", type=int, default=None,
+        help="Seed cố định bản đồ ngẫu nhiên",
+    )
     args = parser.parse_args()
 
     # Tải config
@@ -318,6 +354,16 @@ def main():
     )
     with open(cfg_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    # Ghi đè cấu hình bản đồ từ CLI (nếu có)
+    if args.random_map:
+        cfg["env"]["random_map"] = True
+    if args.difficulty is not None:
+        cfg["env"]["difficulty"] = args.difficulty
+    if args.n_obstacles is not None:
+        cfg["env"]["n_obstacles"] = args.n_obstacles
+    if args.map_seed is not None:
+        cfg["env"]["map_seed"] = args.map_seed
 
     save_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -335,6 +381,12 @@ def main():
     print(" HUẤN LUYỆN AGENTS – ĐỀ TÀI 15: XE TỰ HÀNH MINI")
     print(f" Agents : {agents}")
     print(f" Seeds  : {seeds}")
+    if cfg["env"].get("random_map"):
+        print(f" Bản đồ : NGẪU NHIÊN | difficulty={cfg['env'].get('difficulty')} "
+              f"| n_obstacles={cfg['env'].get('n_obstacles')} "
+              f"| map_seed={cfg['env'].get('map_seed')}")
+    else:
+        print(" Bản đồ : CỐ ĐỊNH (mặc định)")
     print("=" * 60)
 
     for agent_name in agents:
