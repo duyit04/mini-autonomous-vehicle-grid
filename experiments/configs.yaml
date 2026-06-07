@@ -23,7 +23,7 @@ q_learning:
   epsilon_start: 1.0  # epsilon ban đầu (khám phá 100%)
   epsilon_end: 0.01   # epsilon tối thiểu
   epsilon_decay: 0.995  # hệ số suy giảm mỗi episode
-  n_episodes: 20000    # số episode huấn luyện
+  n_episodes: 2000    # số episode huấn luyện
 
 # ---- Thuật toán SARSA ----
 sarsa:
