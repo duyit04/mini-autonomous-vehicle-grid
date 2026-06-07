@@ -121,6 +121,7 @@ class App(tk.Tk):
         self._sel_agent  = tk.StringVar(value="Q-Learning")
         self._sel_goal   = tk.IntVar(value=0)
         self._auto_id    = None        # after() callback id
+        self._auto_running = False     # cờ vòng lặp auto-run
         self._auto_speed = tk.IntVar(value=150)   # ms
 
         # ── Trạng thái episode ──
@@ -143,27 +144,47 @@ class App(tk.Tk):
 
     def _init_agents(self, pretrained):
         env = self.env
+
+        # Khởi tạo từng agent an toàn: agent nào chưa cài (NotImplementedError)
+        # hoặc lỗi khi tạo sẽ để None → giao diện vẫn mở được bình thường.
+        def _safe(factory):
+            try:
+                return factory()
+            except Exception as e:
+                print(f"[INFO] Agent chưa sẵn sàng: {e.__class__.__name__}")
+                return None
+
         agents = {
-            "Random":    RandomAgent(env.n_actions, seed=42),
-            "Heuristic": HeuristicAgent(env),
-            "Q-Learning": QLearningAgent(env.n_states, env.n_actions,
-                                         alpha=0.1, gamma=0.95, seed=42),
-            "SARSA":      SARSAAgent(env.n_states, env.n_actions,
-                                     alpha=0.1, gamma=0.95, seed=42),
+            "Random":    _safe(lambda: RandomAgent(env.n_actions, seed=42)),
+            "Heuristic": _safe(lambda: HeuristicAgent(env)),
+            "Q-Learning": _safe(lambda: QLearningAgent(env.n_states, env.n_actions,
+                                                       alpha=0.1, gamma=0.95, seed=42)),
+            "SARSA":      _safe(lambda: SARSAAgent(env.n_states, env.n_actions,
+                                                   alpha=0.1, gamma=0.95, seed=42)),
         }
-        # Load pre-trained
+        # Load pre-trained (chỉ khi agent đã được cài đặt)
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         save_dir = os.path.join(root, "experiments", "results")
         for key, fname in [("Q-Learning", "q_learning"), ("SARSA", "sarsa")]:
+            if agents[key] is None:
+                continue
             p = os.path.join(save_dir, f"{fname}_seed0_qtable.npy")
             if os.path.exists(p):
-                agents[key].load(p)
-                agents[key].epsilon = 0.0
+                try:
+                    agents[key].load(p)
+                    agents[key].epsilon = 0.0
+                except Exception:
+                    pass
         # Override with pretrained
         if pretrained:
             for key, ag in pretrained.items():
-                agents[key].Q = ag.Q.copy()
-                agents[key].epsilon = 0.0
+                if agents.get(key) is None:
+                    continue
+                try:
+                    agents[key].Q = ag.Q.copy()
+                    agents[key].epsilon = 0.0
+                except Exception:
+                    pass
         return agents
 
     # ------------------------------------------------------------------ #
@@ -319,17 +340,18 @@ class App(tk.Tk):
             cursor="hand2", pady=8,
         )
 
+        # Nút CHẠY chính – chạy thuật toán đang chọn
+        self._btn_auto = tk.Button(
+            parent, text="▶  CHẠY thuật toán",
+            bg=THEME["success"], fg="white",
+            command=self._on_auto, **btn_cfg)
+        self._btn_auto.pack(padx=12, pady=4, fill="x")
+
         self._btn_step = tk.Button(
-            parent, text="▶  Bước tiếp",
+            parent, text="⏭  Bước tiếp",
             bg=THEME["accent2"], fg="white",
             command=self._on_step, **btn_cfg)
         self._btn_step.pack(padx=12, pady=4, fill="x")
-
-        self._btn_auto = tk.Button(
-            parent, text="⏩  Chạy tự động",
-            bg=THEME["accent"], fg="white",
-            command=self._on_auto, **btn_cfg)
-        self._btn_auto.pack(padx=12, pady=4, fill="x")
 
         self._btn_stop_auto = tk.Button(
             parent, text="⏹  Dừng",
@@ -971,15 +993,41 @@ class App(tk.Tk):
 
         self._trail.append((r, c))
         self._redraw()
-        self._set_status("Episode mới – nhấn ▶ để bắt đầu")
+        self._set_status(
+            f"Sẵn sàng – thuật toán [{self._sel_agent.get()}] | "
+            f"nhấn ▶ CHẠY để bắt đầu")
 
     def _do_step(self):
         if self._done:
             self._reset_episode()
             return
 
-        agent = self._agents[self._sel_agent.get()]
-        action = agent.select_action(self._obs, eval_mode=True)
+        agent = self._agents.get(self._sel_agent.get())
+        name  = self._sel_agent.get()
+
+        # Thuật toán chưa được cài đặt → không chạy, báo nhẹ nhàng
+        if agent is None:
+            self._stop_auto()
+            self._set_status(
+                f"⚠ Thuật toán [{name}] chưa được cài đặt "
+                f"(agents/{name.lower().replace('-', '_')}.py).")
+            return
+
+        try:
+            action = agent.select_action(self._obs, eval_mode=True)
+        except TypeError:
+            # Agent không nhận eval_mode (vd RandomAgent)
+            try:
+                action = agent.select_action(self._obs)
+            except NotImplementedError:
+                self._stop_auto()
+                self._set_status(f"⚠ Thuật toán [{name}] chưa được cài đặt.")
+                return
+        except NotImplementedError:
+            self._stop_auto()
+            self._set_status(f"⚠ Thuật toán [{name}] chưa được cài đặt.")
+            return
+
         next_obs, reward, terminated, truncated, info = self.env.step(action)
 
         self._last_action  = action
@@ -1021,24 +1069,40 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ #
 
     def _on_auto(self):
+        agent = self._agents.get(self._sel_agent.get())
+        name  = self._sel_agent.get()
+        if agent is None:
+            self._set_status(
+                f"⚠ Thuật toán [{name}] chưa được cài đặt "
+                f"(agents/{name.lower().replace('-', '_')}.py) – không thể chạy.")
+            return
         if self._done:
             self._reset_episode()
-        self._btn_auto.config(bg="#7C3AED", text="⏩  Đang chạy...")
+        self._btn_auto.config(bg=THEME["accent"], text=f"⏩  Đang chạy [{name}]...")
+        self._set_status(f"▶ Đang chạy thuật toán: {name}")
+        self._auto_running = True
         self._auto_loop()
 
     def _auto_loop(self):
+        if not self._auto_running:
+            return
         if self._done:
-            self._btn_auto.config(bg=THEME["accent"], text="⏩  Chạy tự động")
+            self._btn_auto.config(bg=THEME["success"], text="▶  CHẠY thuật toán")
+            self._auto_running = False
             return
         self._do_step()
+        # Nếu _do_step đã dừng auto (vd thuật toán chưa cài) thì không lặp tiếp
+        if not self._auto_running:
+            return
         speed = self._auto_speed.get()
         self._auto_id = self.after(speed, self._auto_loop)
 
     def _stop_auto(self):
+        self._auto_running = False
         if self._auto_id:
             self.after_cancel(self._auto_id)
             self._auto_id = None
-        self._btn_auto.config(bg=THEME["accent"], text="⏩  Chạy tự động")
+        self._btn_auto.config(bg=THEME["success"], text="▶  CHẠY thuật toán")
 
     # ------------------------------------------------------------------ #
     #  Callbacks                                                           #
