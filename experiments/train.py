@@ -36,6 +36,7 @@ from agents.random_agent import RandomAgent
 from agents.heuristic_agent import HeuristicAgent
 from agents.q_learning import QLearningAgent
 from agents.sarsa import SARSAAgent
+from agents.expected_sarsa import ExpectedSARSAAgent
 
 
 def make_env(cfg: dict) -> DirectionalCarEnv:
@@ -160,7 +161,44 @@ def run_episode_sarsa(agent: SARSAAgent, env: DirectionalCarEnv,
         "collision": int(collision),
     }
 
+def run_episode_expected_sarsa(agent: ExpectedSARSAAgent, env: DirectionalCarEnv, seed_ep= None, eval_mode = False):
+    """
+    Chạy một episode Expected SARSA.
 
+    Khác SARSA thường:
+        Không cần chọn next_action trước khi update.
+        update() tự tính expected_next từ policy epsilon-greedy tại next_state.
+    """
+
+    obs, _ = env.reset(seed = seed_ep)
+    total_reward = 0.0
+    done = False
+    collision = False
+    reached = False
+
+    while not done : 
+        action = agent.select_action(obs, eval_mode= eval_mode)
+
+        next_obs, reward, terminated, truncated, info = env.step (action)
+
+        done = terminated or truncated
+
+        if not eval_mode : 
+            agent.update(obs, action, reward , next_obs, done)
+        total_reward += reward
+        obs = next_obs
+
+        if info.get("collision"):
+            collision = True
+        if info.get("reached_goal"):
+            reached = True
+    
+    return {
+        "total_reward": total_reward,
+        "steps": env.steps,
+        "success": int(reached),
+        "collision": int(collision),
+    }
 # ======================================================================= #
 #  Hàm train chính                                                          #
 # ======================================================================= #
@@ -231,6 +269,21 @@ def train(
         )
         run_ep = run_episode_sarsa
 
+    elif agent_name == "expected_sarsa":
+        ecfg = cfg["expected_sarsa"]
+        n_episodes = ecfg["n_episodes"]
+        agent = ExpectedSARSAAgent(
+            n_states      = env.n_states,
+            n_actions     = env.n_actions,
+            alpha         = ecfg["alpha"],
+            gamma         = ecfg["gamma"],
+            epsilon_start = ecfg["epsilon_start"],
+            epsilon_end   = ecfg["epsilon_end"],
+            epsilon_decay = ecfg["epsilon_decay"],
+            seed          = seed,
+        )
+        run_ep = run_episode_expected_sarsa
+
     else:
         raise ValueError(f"Agent không hợp lệ: {agent_name}")
 
@@ -283,7 +336,7 @@ def train(
     os.makedirs(save_dir, exist_ok=True)
 
     # Lưu Q-table (chỉ RL agents)
-    if agent_name in ("q_learning", "sarsa"):
+    if agent_name in ("q_learning", "sarsa","expected_sarsa"):
         qtable_path = os.path.join(save_dir, f"{agent_name}_seed{seed}_qtable.npy")
         agent.save(qtable_path)
         if verbose:
@@ -307,7 +360,7 @@ def main():
     parser = argparse.ArgumentParser(description="Huấn luyện agents RL")
     parser.add_argument(
         "--agent",
-        choices=["random", "heuristic", "q_learning", "sarsa", "all"],
+        choices=["random", "heuristic", "q_learning", "sarsa","expected_sarsa", "all"],
         default="all",
         help="Agent cần huấn luyện (default: all)",
     )
@@ -372,7 +425,7 @@ def main():
 
     seeds = [args.seed] if args.seed is not None else cfg["evaluation"]["seeds"]
     agents = (
-        ["random", "heuristic", "q_learning", "sarsa"]
+        ["random", "heuristic", "q_learning", "sarsa","expected_sarsa"]
         if args.agent == "all"
         else [args.agent]
     )

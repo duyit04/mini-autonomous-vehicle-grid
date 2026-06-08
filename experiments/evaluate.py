@@ -37,11 +37,13 @@ from agents.random_agent import RandomAgent
 from agents.heuristic_agent import HeuristicAgent
 from agents.q_learning import QLearningAgent
 from agents.sarsa import SARSAAgent
+from agents.expected_sarsa import ExpectedSARSAAgent
 from experiments.train import (
     make_env,
     run_episode_random_or_heuristic,
     run_episode_qlearning,
     run_episode_sarsa,
+    run_episode_expected_sarsa,
 )
 
 
@@ -71,6 +73,9 @@ def evaluate_agent(agent, env, agent_name: str, n_episodes: int,
         elif agent_name == "sarsa":
             result = run_episode_sarsa(agent, env, seed_ep=ep_seed,
                                        eval_mode=True)
+        elif agent_name == "expected_sarsa":
+            result = run_episode_expected_sarsa(agent, env, seed_ep=ep_seed,
+                                        eval_mode=True)
         else:
             raise ValueError(f"Unknown agent: {agent_name}")
 
@@ -155,7 +160,24 @@ def evaluate_all_seeds(agent_name: str, cfg: dict,
             else:
                 print(f"  [WARN] Q-table không tìm thấy: {qtable_path}")
                 continue
-
+        elif agent_name == "expected_sarsa":
+            ecfg = cfg["expected_sarsa"]
+            agent = ExpectedSARSAAgent(
+                n_states  = env.n_states,
+                n_actions = env.n_actions,
+                alpha     = ecfg["alpha"],
+                gamma     = ecfg["gamma"],
+                seed      = seed,
+            )
+            qtable_path = os.path.join(
+                save_dir, f"expected_sarsa_seed{seed}_qtable.npy"
+            )
+            if os.path.exists(qtable_path):
+                agent.load(qtable_path)
+                agent.epsilon = 0.0
+            else:
+                print(f"  [WARN] Q-table không tìm thấy: {qtable_path}")
+                continue           
         else:
             raise ValueError(f"Unknown agent: {agent_name}")
 
@@ -222,7 +244,7 @@ def print_summary(summaries: list):
     # Kiểm tra mục tiêu
     print("\n KIỂM TRA MỤC TIÊU ĐỀ TÀI:")
     for s in summaries:
-        if not s or s["agent"] not in ("q_learning", "sarsa"):
+        if not s or s["agent"] not in ("q_learning", "sarsa", "expected_sarsa"):
             continue
         ok_sr  = "✓" if s["success_mean"]   >= 0.85 else "✗"
         ok_col = "✓" if s["collision_mean"] <= 0.10 else "✗"
@@ -239,7 +261,7 @@ def main():
     parser = argparse.ArgumentParser(description="Đánh giá agents RL")
     parser.add_argument(
         "--agent",
-        choices=["random", "heuristic", "q_learning", "sarsa", "all"],
+        choices=["random", "heuristic", "q_learning", "sarsa", "expected_sarsa", "all"],
         default="all",
     )
     parser.add_argument("--config", default="experiments/configs.yaml")
@@ -275,7 +297,7 @@ def main():
     n_eval   = cfg["evaluation"]["n_eval_episodes"]
 
     agent_list = (
-        ["random", "heuristic", "q_learning", "sarsa"]
+        ["random", "heuristic", "q_learning", "sarsa","expected_sarsa"]
         if args.agent == "all"
         else [args.agent]
     )

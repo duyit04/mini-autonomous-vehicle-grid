@@ -42,6 +42,7 @@ from agents.random_agent import RandomAgent
 from agents.heuristic_agent import HeuristicAgent
 from agents.q_learning import QLearningAgent
 from agents.sarsa import SARSAAgent
+from agents.expected_sarsa import ExpectedSARSAAgent
 
 # ── Bảng màu: Dark & Light mode ─────────────────────────────────────────
 DARK = {
@@ -91,6 +92,7 @@ AGENT_COLORS  = {
     "Heuristic": "#F59E0B",
     "Q-Learning":"#3B82F6",
     "SARSA":     "#10B981",
+    "Expected SARSA": "#A855F7",
 }
 
 
@@ -384,13 +386,18 @@ logging:
 
 def quick_train(n_ep: int = None, cfg: dict = None) -> dict:
     """Train nhanh Q-Learning & SARSA dùng siêu tham số từ configs.yaml."""
-    from experiments.train import run_episode_qlearning, run_episode_sarsa
+    from experiments.train import (
+        run_episode_qlearning,
+        run_episode_sarsa,
+        run_episode_expected_sarsa,
+    )
     cfg = cfg if cfg is not None else load_train_config()
     env = DirectionalCarEnv()
     result = {}
     for Cls, fn, key, cfg_key in [
         (QLearningAgent, run_episode_qlearning, "Q-Learning", "q_learning"),
         (SARSAAgent,     run_episode_sarsa,     "SARSA",      "sarsa"),
+        (ExpectedSARSAAgent, run_episode_expected_sarsa, "Expected SARSA", "expected_sarsa"),
     ]:
         hp = _hp(cfg, cfg_key)
         episodes = n_ep if n_ep is not None else hp["n_episodes"]
@@ -413,7 +420,7 @@ def quick_train(n_ep: int = None, cfg: dict = None) -> dict:
 class App(tk.Tk):
     """Cửa sổ chính của dashboard."""
 
-    AGENTS = ["Random", "Heuristic", "Q-Learning", "SARSA"]
+    AGENTS = ["Random", "Heuristic", "Q-Learning", "SARSA", "Expected SARSA"]
     GOALS  = ["G0 – (0, 6)", "G1 – (3, 6)", "G2 – (6, 0)"]
 
     def __init__(self, pretrained: dict = None):
@@ -477,11 +484,18 @@ class App(tk.Tk):
                                                        alpha=0.1, gamma=0.95, seed=42)),
             "SARSA":      _safe(lambda: SARSAAgent(env.n_states, env.n_actions,
                                                    alpha=0.1, gamma=0.95, seed=42)),
+            "Expected SARSA": _safe(lambda: ExpectedSARSAAgent(
+                                                            env.n_states,
+                                                            env.n_actions,
+                                                            alpha=0.1,
+                                                            gamma=0.95,
+                                                            seed=42
+                                                        )),
         }
         # Load pre-trained (chỉ khi agent đã được cài đặt)
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         save_dir = os.path.join(root, "experiments", "results")
-        for key, fname in [("Q-Learning", "q_learning"), ("SARSA", "sarsa")]:
+        for key, fname in [("Q-Learning", "q_learning"), ("SARSA", "sarsa"),("Expected SARSA", "expected_sarsa")]:
             if agents[key] is None:
                 continue
             p = os.path.join(save_dir, f"{fname}_seed0_qtable.npy")
@@ -531,7 +545,7 @@ class App(tk.Tk):
         )
         self._btn_theme.pack(side="right", padx=12, pady=10)
 
-        tk.Label(hdr, text="Reinforcement Learning · Q-Learning & SARSA",
+        tk.Label(hdr, text="Reinforcement Learning · Q-Learning · SARSA · Expected SARSA",
                  bg=THEME["panel2"], fg=THEME["accent2"],
                  font=("Segoe UI", 10)).pack(side="right", padx=12)
 
@@ -1192,6 +1206,14 @@ class App(tk.Tk):
             ("epsilon_decay", "ε decay/episode",     "float"),
             ("n_episodes",    "Số episode train",    "int"),
         ]),
+        ("Expected SARSA", "expected_sarsa", [
+            ("alpha",         "α – tốc độ học",      "float"),
+            ("gamma",         "γ – chiết khấu",      "float"),
+            ("epsilon_start", "ε bắt đầu",           "float"),
+            ("epsilon_end",   "ε tối thiểu",         "float"),
+            ("epsilon_decay", "ε decay/episode",     "float"),
+            ("n_episodes",    "Số episode train",    "int"),
+        ]),
         ("Môi trường", "env", [
             ("max_steps",   "Max bước/episode",   "int"),
             ("random_map",  "Bản đồ ngẫu nhiên",  "bool"),
@@ -1684,6 +1706,7 @@ class App(tk.Tk):
         for key, fname, Cls in [
             ("Q-Learning", "q_learning", QLearningAgent),
             ("SARSA",      "sarsa",      SARSAAgent),
+            ("Expected SARSA", "expected_sarsa", ExpectedSARSAAgent),
         ]:
             try:
                 ag = Cls(self.env.n_states, self.env.n_actions,
@@ -1712,13 +1735,19 @@ class App(tk.Tk):
         progress=True → cập nhật thanh trạng thái + in console theo thời gian
         thực để người dùng theo dõi quá trình học (thay vì chạy ẩn).
         """
-        from experiments.train import run_episode_qlearning, run_episode_sarsa
+        
+        from experiments.train import (
+            run_episode_qlearning,
+            run_episode_sarsa,
+            run_episode_expected_sarsa,
+        )
         # Đọc lại configs.yaml MỖI LẦN train → chỉnh config xong bấm train là
         # áp dụng ngay, không cần khởi động lại dashboard.
         self._cfg = load_train_config()
         specs = [
             ("Q-Learning", QLearningAgent, run_episode_qlearning, "q_learning"),
             ("SARSA",      SARSAAgent,     run_episode_sarsa,     "sarsa"),
+            ("Expected SARSA", ExpectedSARSAAgent, run_episode_expected_sarsa,  "expected_sarsa")
         ]
         for key, Cls, fn, cfg_key in specs:
             hp = _hp(self._cfg, cfg_key)

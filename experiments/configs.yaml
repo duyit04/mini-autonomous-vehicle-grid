@@ -34,6 +34,15 @@ sarsa:
   epsilon_decay: 0.995
   n_episodes: 5000
 
+
+#----- Thuật toán Expected SARSA -----
+expected_sarsa :
+  alpha: 0.1
+  gamma: 0.95
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
+  n_episodes: 5000
 # ---- Đánh giá ----
 evaluation:
   n_seeds: 10            # số seed để đánh giá
