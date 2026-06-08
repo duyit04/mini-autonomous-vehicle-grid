@@ -27,23 +27,23 @@ class RandomAgent:
     name = "random"
 
     def __init__(self, n_actions: int, seed: int = None):
-        # TODO: lưu n_actions, khởi tạo numpy RNG với seed
-        raise NotImplementedError
+        self.n_actions = n_actions
+        self.rng = np.random.default_rng(seed)
 
-    def select_action(self, state) -> int:
+    def select_action(self, state, eval_mode: bool = False, **kwargs) -> int:
         """
         Trả về một action ngẫu nhiên.
 
         Parameters
         ----------
         state : int   Trạng thái hiện tại (bỏ qua, không dùng)
+        eval_mode : bool   Chế độ đánh giá (bỏ qua)
 
         Returns
         -------
         int   Action trong [0, n_actions)
         """
-        # TODO: trả về action ngẫu nhiên đều trong [0, n_actions)
-        raise NotImplementedError
+        return int(self.rng.integers(self.n_actions))
 
     def update(self, state, action, reward, next_state, terminated, **kwargs):
         """Không học – bỏ qua."""
@@ -64,3 +64,4 @@ class RandomAgent:
     def load(self, path: str):
         """Không có gì để tải."""
         pass
+
