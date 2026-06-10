@@ -35,8 +35,7 @@ class HeuristicAgent:
     name = "heuristic"
 
     def __init__(self, env):
-        # TODO: lưu env để dùng env.decode_state() và env.GOALS
-        raise NotImplementedError
+        self.env = env
 
     def select_action(self, state) -> int:
         """
@@ -50,15 +49,57 @@ class HeuristicAgent:
         -------
         int   Action trong {FORWARD=0, TURN_LEFT=1, TURN_RIGHT=2, STOP=3}
         """
-        # TODO:
-        #   1. decode state → (row, col, heading, goal_id)
-        #   2. lấy (goal_row, goal_col) từ env.GOALS[goal_id]
-        #   3. nếu (row, col) == (goal_row, goal_col) → STOP (3)
-        #   4. tính hướng mong muốn (desired_heading) để tiến gần goal hơn
-        #   5. nếu heading == desired_heading → FORWARD (0)
-        #   6. nếu (desired_heading - heading) % 4 == 1 → TURN_RIGHT (2)
-        #   7. ngược lại → TURN_LEFT (1)
-        raise NotImplementedError
+        row, col, heading, goal_id = self.env.state_decoder(state)
+        goal_row, goal_col = self.env.GOALS[goal_id]
+
+        if (row, col) == (goal_row, goal_col):
+            return 3  # STOP
+
+        dr = goal_row - row
+        dc = goal_col - col
+
+        # Xây danh sách hướng ưu tiên: trục xa hơn trước, trục gần hơn sau
+        if abs(dr) >= abs(dc):
+            primary   = 2 if dr > 0 else 0   # SOUTH/NORTH
+            secondary = 1 if dc > 0 else 3   # EAST/WEST  (dc==0 thì không dùng)
+        else:
+            primary   = 1 if dc > 0 else 3   # EAST/WEST
+            secondary = 2 if dr > 0 else 0   # SOUTH/NORTH (dr==0 thì không dùng)
+
+        # Lọc: chỉ giữ hướng mà ô phía trước không bị chặn
+        candidates = [primary]
+        if dc != 0 and secondary != primary:
+            candidates.append(secondary)
+        # Thêm 2 hướng còn lại làm fallback tránh kẹt hoàn toàn
+        for h in range(4):
+            if h not in candidates:
+                candidates.append(h)
+
+        def _blocked(h):
+            """True nếu tiến theo hướng h sẽ va chạm tường hoặc obstacle."""
+            ddr, ddc = self.env.DELTAS[h]
+            nr, nc = row + ddr, col + ddc
+            G = self.env.GRID_SIZE
+            return not (0 <= nr < G and 0 <= nc < G) or (nr, nc) in self.env.OBSTACLES
+
+        # Chọn hướng tốt nhất không bị chặn
+        desired_heading = None
+        for h in candidates:
+            if not _blocked(h):
+                desired_heading = h
+                break
+
+        # Tất cả hướng đều bị chặn (không thể xảy ra trong map liên thông)
+        if desired_heading is None:
+            return 1  # TURN_LEFT để thoát kẹt
+
+        if heading == desired_heading:
+            return 0  # FORWARD
+
+        if (desired_heading - heading) % 4 == 1:
+            return 2  # TURN_RIGHT
+
+        return 1  # TURN_LEFT
 
     def update(self, state, action, reward, next_state, terminated, **kwargs):
         """Không học – bỏ qua."""
